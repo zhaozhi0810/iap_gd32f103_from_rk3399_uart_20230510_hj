@@ -300,7 +300,8 @@ void AnswerCpu_data(uint8_t *cmd)
 		case eMCU_UPDATE_MCUFIRM_TYPE:
 			if(cmd[1] == 0)
 			{
-				printf("eMCU_UPDATE_MCUFIRM_TYPE  cmd[1] == 0 \r\n");
+				if(more_debug_info)
+					printf("eMCU_UPDATE_MCUFIRM_TYPE  cmd[1] == 0 \r\n");
 				Uart_Tx(TOCPU_COM_NUM, 0x5a);
 				Uart_Tx(TOCPU_COM_NUM, 0xa5);
 				checksum = (uint8_t)(0x5a + 0xa5);
@@ -316,9 +317,26 @@ void AnswerCpu_data(uint8_t *cmd)
 			}
 			else if(cmd[1] == 1)	
 			{
-				debug_printf_string("eMCU_UPDATE_MCUFIRM_TYPE  cmd[1] == 1\r\n");
+				if(more_debug_info)
+					debug_printf_string("eMCU_UPDATE_MCUFIRM_TYPE  cmd[1] == 1\r\n");
 				hard_wtd_disable();  //关闭用于3399的看门狗
 				goto_ota_update();   //设置标志位后立即重启。
+			}
+			else if(cmd[1] == 2) //2023-05-11，查询编译时间及版本
+			{
+				checksum = (uint8_t)(0x5a+0xa5);
+				Uart_Tx(TOCPU_COM_NUM, 0x5a);
+				Uart_Tx(TOCPU_COM_NUM, 0xa5);
+				for(i=0;i<20;i++)
+				{
+					Uart_Tx(TOCPU_COM_NUM, g_build_time_str[11+i]);
+					//g_IIC_tx_buf[i+2] = g_build_time_str[11+i];  //前面几个字符不需要发送
+					checksum += g_build_time_str[11+i];				
+				}
+				Uart_Tx(TOCPU_COM_NUM, GetMcuVersion());//g_IIC_tx_buf[i+2] = SOFT_VERSION;  //加上版本号
+				checksum += GetMcuVersion();
+				Uart_Tx(TOCPU_COM_NUM, checksum);   //校验和写入缓存
+				//g_iic0_send_size = 24;    //总共20个字符加上头部2，版本号，校验和1
 			}
 			break;
 		

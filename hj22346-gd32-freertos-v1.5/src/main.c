@@ -4,7 +4,7 @@
 
 
 const char* g_build_time_str = "Buildtime :"__DATE__" "__TIME__;   //获得编译时间
-static uint8_t g_McuVersion = 103;   //1.03,2023-03-29升级103
+static uint8_t g_McuVersion = 104;   //1.03,2023-03-29升级103,//1.04,2023-05-11升级104
 
 /*
 	102   2023-02-02  单片机支持串口升级功能，调试串口命令y 需要烧写ota的程序
@@ -94,9 +94,9 @@ int main(void)
 //	debug_printf_string("\r\n");
 	
 	//1.工作灯的任务
-	xTaskCreate(Task_Led_Show_Work,"TaskLed1",configMINIMAL_STACK_SIZE/2,NULL,2,NULL);
+	xTaskCreate(Task_Led_Show_Work,"TaskLed1",configMINIMAL_STACK_SIZE,NULL,2,NULL);
 	//2.调试串口接收任务
-	xTaskCreate(Com_Debug_Recv_Task,"debugr",configMINIMAL_STACK_SIZE*2-16,NULL,2,NULL);  //调试串口接收任务
+	xTaskCreate(Com_Debug_Recv_Task,"debugr",configMINIMAL_STACK_SIZE*2,NULL,2,NULL);  //调试串口接收任务
 
 	//3. 9211只需要初始化，创建任务后自己删除自己,，如果要打印数据的话，栈要设置大一点
 	xTaskCreate(LT9211_Once_Task,"lt9211",configMINIMAL_STACK_SIZE+16,NULL,4,NULL);

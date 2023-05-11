@@ -13,7 +13,7 @@
 *	Copyright (C), 2022-2030, htjc by dazhi
 *
 *
-*    aarch64-linux-gnu-gcc *.c -o xyzmodem_send
+*    aarch64-linux-gnu-gcc *.c -o xyzmodem_send_hj
 *********************************************************************************************************
 */
 #include <stdio.h>
@@ -26,7 +26,7 @@
 #include <string.h>
  /* Ô´ÎÄ¼þÂ·¾¶ */
 //char SourceFile[] = "./app.bin";    
-static const char* my_opt = "f:";
+static const char* my_opt = "Yyf:";
 
 //70.需要server关闭串口，防止升级失败
 //val: 0 表示临时关闭，1表示开启
@@ -34,78 +34,7 @@ int drvControlttyS0(int val);  //因为要升级单片机程序，需要临时�
 
 
 
-#if 0
-void send_update_cmd_tomcu(uint8_t phase)
-{
-	uint8_t buf[] = {0xa5,74,0,0xef};   //Éý¼¶ÃüÁî
 
-	if(phase)
-	{
-		buf[2] = 1;  //确认需要下载
-		buf[3] = 0xf0;  //check sum
-	}	
-
-	UART_SendPacket(buf, 4);   //4¸ö×Ö½Ú·¢³öÈ¥
-}
-
-#else
-
-int  send_update_cmd_tomcu(uint8_t*data,uint8_t phase)
-{
-	uint8_t buf[] = {0xa5,74,0,0xef};   //Éý¼¶ÃüÁî
-	int ret;
-	int i = 0;
-	
-
-	if(phase)
-	{
-		buf[2] = 1;  //确认需要下载
-		buf[3] = 0xf0;	//check sum
-		UART_SendPacket(buf, 4);   //4¸ö×Ö½Ú·¢³öÈ¥
-	}	
-	else
-	{
-		do
-		{
-			if(i == 0)
-			{
-				UART_SendPacket(buf, 4);   //4¸ö×Ö½Ú·¢³öÈ¥
-				usleep(100000);
-			}
-
-			ret = UART_ReceiveByte (data+i, 100);
-			if(ret == 0)
-			{
-				if(i == 0)
-				{
-					if(data[0] == 0x5a)
-						i++;
-				}
-				else if(i == 1)
-				{
-					if(data[1] == 0xa5)
-						i++;
-					else
-						i = 0;
-				}
-				else if(i < 34)
-					i++;
-				else
-				{
-				//	i = 0;
-					break;
-				}
-			}
-			//printf("i=%d\n",i);		
-			
-		}
-		while(1);
-	}
-
-	return 0;
-}
-
-#endif
 
 
 
@@ -138,10 +67,9 @@ static int is_server_process_start(char * cmd_name)
 		if(count < 1)//当进程数小于等于2时，说明进程不存在, 1表示有一个，是grep 进程的
 		{
 			pclose(ptr);
-			printf("ServerDEBUG: check serverProcess: no server process,ready to start serverProcess!!\n");
+			printf("ServerDEBUG: check serverProcess: no server process!!\n");
 			return 0;  //系统中没有该进程	
-		}
-		
+		}		
 		printf("ServerDEBUG: check serverProcess: server process is running!!\n");
 	}
 	pclose(ptr);
@@ -158,6 +86,8 @@ int main(int argc,char* argv[])
 	char* filename = "./app.bin";
 	int get_name = 0,c;
 	int serverflag = 0;//,ret
+	int go_ahead = 1;    //继续吗？0要键入字符y才能继续
+
 
     if(argc != 1)
 	{	
@@ -177,27 +107,44 @@ int main(int argc,char* argv[])
 	        		get_name = 1;
 	                //debug_level = atoi(optarg);
 	                printf("filename = %s\n",filename);
-	                break;	       
+	                break;
+	            case 'y':
+	            case 'Y':
+	            	go_ahead = 0;	       
 	       	 	default:	       
 	                break;
 	                //return 0;
 	        }
-	        if(get_name)  //Ìø³ö´óÑ­»·
-	        	break;
+	        // if(get_name)  //Ìø³ö´óÑ­»·
+	        // 	break;
 	    }
+	}
+
+	if(go_ahead)
+	{
+		printf("注意事项：\n");
+		printf("由于本次升级使用通信串口，为了避免升级过程中的干扰，本程序会关闭drv722_22134_server服务程序\n");
+		printf("可能将导致应用程序异常退出，敬请关注\n");
+		printf("如果升级失败，请关闭相关使用串口的程序，重新尝试，感谢您的使用\n");
+		printf("如继续升级，请键入y或者Y，回车，其他输入则退出升级\n");
+		c = getchar();
+		if(c == 'y' || c == 'Y')
+		{
+			printf("继续升级流程\n");
+		}
+		else
+		{
+			printf("升级流程中止，感谢您的使用\n");
+			return 1;
+		}
 	}
 
 	if(1 == is_server_process_start("drv722_22134_server"))  //存在server进程
 	{
 		system("killall drv722_22134_server");
-		// serverflag = 1;
-		// drvControlttyS0(0);  //drv722_22134_server关闭串口
-		// printf("drv722_22134_server is running!!\n");
-	}	
-	uart_init(argc, argv);
-	//sleep(1);
+	}
 
-	//sleep(1);
+	uart_init(argc, argv);
 
     if(0 == xymodem_send(filename))
     	printf("%s is done!\n",argv[0]);
