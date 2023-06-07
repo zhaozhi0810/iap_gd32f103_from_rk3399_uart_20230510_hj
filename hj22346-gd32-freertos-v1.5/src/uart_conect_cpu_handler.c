@@ -294,7 +294,7 @@ void AnswerCpu_data(uint8_t *cmd)
 			isreply = 0;
 			break;
 		case eMCU_GET_MCUVERSION_TYPE:
-			buf[2] = GetMcuVersion();  //返回值0表示5寸屏，非0表示7寸屏,2022-12-12
+			buf[2] = GetMcuVersion();  //2022-12-12
 			isreply = 1;
 			break;
 		case eMCU_UPDATE_MCUFIRM_TYPE:

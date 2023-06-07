@@ -39,7 +39,7 @@ void Led_Show_Work_Off(void)
 //工作灯闪烁
 void Task_Led_Show_Work(void* arg)
 {
-//	static uint8_t n = 0;
+	static uint8_t n = 0;
 	Led_Show_Work_init();
 	arg = arg;
 
@@ -53,6 +53,15 @@ void Task_Led_Show_Work(void* arg)
 		
 		fwdgt_counter_reload();  //等待时间约1.6s
 		
+		
+		
+		if(n < 40)
+			n++;
+		else if(n == 40)
+		{ //开启看门狗
+			hard_wtd_enable();
+			n++;
+		}
 //		if(!update_success_flag)
 //		{
 //			//启动后，设置升级成功标志

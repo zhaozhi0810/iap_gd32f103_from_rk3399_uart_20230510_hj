@@ -42,7 +42,7 @@ extern uint8_t tab_1024[1024];
 extern uint8_t md5sum_down[34];  //存放md5值
 
 
-
+uint16_t Cal_CRC16(const uint8_t* data, uint32_t size);
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 
@@ -92,6 +92,7 @@ static int32_t Receive_Packet (uint8_t *data, int32_t *length, uint32_t timeout)
 {
 	uint16_t i, packet_size;
 	uint8_t c;
+	uint16_t tempCRC,tempCRC1;
 	*length = 0;
 	if (Receive_Byte(&c, timeout) != 0)
 	{
@@ -141,6 +142,15 @@ static int32_t Receive_Packet (uint8_t *data, int32_t *length, uint32_t timeout)
 		printf("error: data[PACKET_SEQNO_INDEX] = %#x\r\n",data[PACKET_SEQNO_INDEX]);
 		return -1;
 	}
+	
+	
+	tempCRC = Cal_CRC16(&data[PACKET_HEADER], packet_size);
+	tempCRC1 = data[packet_size + PACKET_HEADER]<<8 | data[packet_size + PACKET_HEADER+1];
+	if(tempCRC != tempCRC1)
+	{
+		printf("checksum error checksum = %#x,data[%d] = %#x,%#x\r\n",tempCRC,packet_size + PACKET_HEADER,data[packet_size + PACKET_HEADER],data[packet_size + PACKET_HEADER+1]);
+		return -1;
+	}
 	*length = packet_size;
 	return 0;
 }
@@ -160,13 +170,13 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 	uint32_t FlashDestination_const;	
 	uint8_t time_out = 0;   //做一个计时，如果计数120次（大概两分钟？），就退出下载模式
 	/* Initialize FlashDestination variable */
-	if(is_cpu_update_cmd) //rk3399下载的位置不同，是down分区
-	{
+//	if(is_cpu_update_cmd) //rk3399下载的位置不同，是down分区
+//	{
 		FlashDestination = ApplicationDownAddress;		
-	}
-	else{
-		FlashDestination = ApplicationAddress;		
-	}
+//	}
+//	else{
+//		FlashDestination = ApplicationAddress;		
+//	}
 	FlashDestination_const = FlashDestination;
 //	printf("FlashDestination = %#x\r\n",FlashDestination);
 	

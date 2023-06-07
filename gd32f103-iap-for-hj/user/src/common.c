@@ -412,9 +412,9 @@ void get_cmd_from_debug_uart0(void)
 			if(0==SerialDownload())
 			{
 				printf("debug uart update done!\r\n");
-				if(!mcu_download_done())  //返回0表示成功
-				{
-					mcu_update_done();
+				if(!mcu_download_done()){
+					flash_download_copyto_app();  //下载成功后完成一次拷贝。
+					printf("debug uart update done!\r\n");
 					NVIC_SystemReset();
 				}
 			}
