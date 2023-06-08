@@ -77,6 +77,11 @@ extern const char* g_build_time_str;
 //获得软件版本2023-01-15
 extern uint8_t GetMcuVersion(void);
 
+//返回1表示开机开启看门狗，0表示关闭看门狗
+uint8_t is_watchdog_startup_inflash(void);   //ota-uart.c
+//把开机启动是否启动看门狗设置到flash中，非0表示开启，0表示关闭
+void set_watchdog_startup_inflash(uint8_t enable);  //ota-uart.c
+
 extern uint8_t more_debug_info;   //打印更多的调试信息，0则不打印，调试串口控制
 #endif
 

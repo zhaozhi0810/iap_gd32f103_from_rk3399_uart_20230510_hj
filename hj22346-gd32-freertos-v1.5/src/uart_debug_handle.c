@@ -200,7 +200,6 @@ int main(void);
 
 static void  Com_Debug_Print_Help(void)
 {
-	printf("vector = %p\r\n",main);
 	printf("\r\nDebug cmd:\r\n");
 	printf("0. print Program build time\r\n");
 	if(Get_Lcd_Type()){  //返回1表示7寸屏，0表示5寸屏
@@ -222,6 +221,8 @@ static void  Com_Debug_Print_Help(void)
 	printf("f. key_leds pwm increace(10%%)\r\n");
 	printf("g. key_leds all on\r\n");
 	printf("h. key_leds all off\r\n");
+	printf("i. watch dog temporaty on/off\r\n");
+	printf("j. watch dog set on/off(Maintain after restart)\r\n");
 #if 0
 	printf("j. key_leds some one on\r\n");
 	printf("k. key_leds some one off\r\n");
@@ -338,6 +339,28 @@ static void Com_Debug_Message_Handle1(uint8_t buf)
 		case 'h':   //键灯全部熄灭控制
 			debug_printf_string("2023 key_light_allleds_control(0)!!\r\n");
 			key_light_allleds_control(0);
+			break;
+		case 'i':
+			if(get_hard_wtd_status())
+			{
+				hard_wtd_disable();
+				is_debug_down_wtg = 1;
+			}
+			else
+			{
+				is_debug_down_wtg = 0;   //允许打开
+				hard_wtd_enable();
+			}
+			break;
+		case 'j':
+			if(is_watchdog_startup_inflash())  //已经开启了，则关闭
+			{	
+				set_watchdog_startup_inflash(0);
+			}
+			else
+			{
+				set_watchdog_startup_inflash(1);
+			}
 			break;
 		case 'v':
 			printf("mcu version = %d\r\n", GetMcuVersion());

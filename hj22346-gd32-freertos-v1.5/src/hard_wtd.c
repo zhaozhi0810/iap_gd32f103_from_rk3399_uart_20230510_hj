@@ -21,6 +21,7 @@
 
 
 static uint8_t is_hwtd_enable = 0;   //默认看门狗不允许使能
+uint8_t is_debug_down_wtg = 0;       //1调试串口关闭了看门狗，这样就不会允许打开了
 
 static TaskHandle_t  TaskHandle_Hard_Wtd;  
 
@@ -35,6 +36,12 @@ static uint16_t hwtd_timeout_count = 0;  //喂狗计时值。
 
 void hard_wtd_enable(void)
 {
+	if(is_debug_down_wtg)   //调试串口不允许开启，则不能开启
+	{	
+		debug_printf_string("debug_down_wtg is set,not enable wtg\r\n");
+		return;
+	}
+	
 	is_hwtd_enable = 1;
 	hwtd_timeout_count = hwtd_timeout;
 	debug_printf_string("hard_wtd_enable\r\n");

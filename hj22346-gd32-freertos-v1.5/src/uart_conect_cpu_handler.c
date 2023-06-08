@@ -231,10 +231,21 @@ void AnswerCpu_data(uint8_t *cmd)
 			isreply = 1;
 			break;
 		case eMCU_HWTD_SETONOFF_TYPE:  //设置看门狗打开或者关闭
-			if(cmd[1])
-				hard_wtd_enable();   //打开看门狗
-			else
-				hard_wtd_disable();  //关闭
+			if(!(cmd[1]&0xf0))  //高4位必须为0，才能开启或关闭看门狗
+			{
+				if((cmd[1]&0xf))   //低4位为非0
+					hard_wtd_enable();   //打开看门狗
+				else   //低4位为0
+					hard_wtd_disable();  //关闭
+			}
+			else if((cmd[1]&0xf0) == 0xe0)
+			{
+				set_watchdog_startup_inflash(1);  //上电后开启看门狗
+			}
+			else if((cmd[1]&0xf0) == 0xd0)
+			{	
+				set_watchdog_startup_inflash(0);// 上电后关闭看门狗
+			}
 			isreply = 0;
 			break;
 		case eMCU_HWTD_FEED_TYPE:  //设置看门狗打开或者关闭

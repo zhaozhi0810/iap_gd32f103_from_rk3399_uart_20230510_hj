@@ -59,7 +59,8 @@ void Task_Led_Show_Work(void* arg)
 			n++;
 		else if(n == 40)
 		{ //开启看门狗
-			hard_wtd_enable();
+			if(is_watchdog_startup_inflash())  //flash中设置了开启才会开启
+				hard_wtd_enable();
 			n++;
 		}
 //		if(!update_success_flag)

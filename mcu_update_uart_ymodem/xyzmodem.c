@@ -541,26 +541,203 @@ uint8_t Ymodem_Transmit (uint8_t *buf, const uint8_t* sendFileName, uint32_t siz
 
 char md5_readBuf[64] = {0};
 
-static int get_file_md5sum(const char * filename)
+#if 1  
+
+#define ROTATELEFT(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
+
+/**
+ * @desc: convert message and mes_bkp string into integer array and store them in w
+ */
+static void md5_process_part1(uint32_t *w, unsigned char *message, uint32_t *pos, uint32_t mes_len, const unsigned char *mes_bkp)
 {
-	FILE * filep;
-	char cmd[128] = {"md5sum "};
-	
+    uint32_t i; // used in for loop
+
+    for(i = 0; i <= 15; i++)
+    {
+        int32_t count = 0;
+        while(*pos < mes_len && count <= 24)
+        {
+            w[i] += (((uint32_t)message[*pos]) << count);
+            (*pos)++;
+            count += 8;
+        }
+        while(count <= 24)
+        {
+            w[i] += (((uint32_t)mes_bkp[*pos - mes_len]) << count);
+            (*pos)++;
+            count += 8;
+        }
+    }
+}
+
+/**
+ * @desc: start encryption based on w
+ */
+static void md5_process_part2(uint32_t abcd[4], uint32_t *w, const uint32_t k[64], const uint32_t s[64])
+{
+    uint32_t i; // used in for loop
+
+    uint32_t a = abcd[0];
+    uint32_t b = abcd[1];
+    uint32_t c = abcd[2];
+    uint32_t d = abcd[3];
+    uint32_t f = 0;
+    uint32_t g = 0;
+
+    for(i = 0; i < 64; i++)
+    {
+        if(i <= 15) //i >= 0 && 
+        {
+            f = (b & c) | ((~b) & d);
+            g = i;
+        }else if(i >= 16 && i <= 31)
+        {
+            f = (d & b) | ((~d) & c);
+            g = (5 * i + 1) % 16;
+        }else if(i >= 32 && i <= 47)
+        {
+            f = b ^ c ^ d;
+            g = (3 * i + 5) % 16;
+        }else if(i >= 48 && i <= 63)
+        {
+            f = c ^ (b | (~d));
+            g = (7 * i) % 16;
+        }
+        uint32_t temp = d;
+        d = c;
+        c = b;
+        b = ROTATELEFT((a + f + k[i] + w[g]), s[i]) + b;
+        a = temp;
+    }
+
+    abcd[0] += a;
+    abcd[1] += b;
+    abcd[2] += c;
+    abcd[3] += d;
+}
+
+static const uint32_t k_table[]={
+    0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,
+    0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,0x698098d8,
+    0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,
+    0xa679438e,0x49b40821,0xf61e2562,0xc040b340,0x265e5a51,
+    0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
+    0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,
+    0xfcefa3f8,0x676f02d9,0x8d2a4c8a,0xfffa3942,0x8771f681,
+    0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,
+    0xbebfbc70,0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,
+    0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,0xf4292244,
+    0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,
+    0xffeff47d,0x85845dd1,0x6fa87e4f,0xfe2ce6e0,0xa3014314,
+    0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391
+};
+
+static const uint32_t s_table[]={
+    7,12,17,22,7,12,17,22,7,12,17,22,7,
+    12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+    4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,
+    15,21,6,10,15,21,6,10,15,21,6,10,15,21
+};
+
+int32_t cal_md5(unsigned char *result, unsigned char *data, int length){
+    if (result == NULL)
+    {
+        return 1;
+    }
+
+    uint32_t w[16];
+
+    uint32_t i; // used in for loop
+
+    uint32_t mes_len = length;
+    uint32_t looptimes = (mes_len + 8) / 64 + 1;
+    uint32_t abcd[] = {0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476};
+
+    uint32_t pos = 0; // position pointer for message
+    uint32_t bkp_len = 64 * looptimes - mes_len; // 经过计算发现不超过72
+
+//    unsigned char *bkp_mes = (unsigned char *)calloc(1, bkp_len);
+    unsigned char bkp_mes[80];
+    for(int i = 0; i < 80; i++) //初始化
+    {
+        bkp_mes[i] = 0;
+    }
+
+    bkp_mes[0] = (unsigned char)(0x80);
+    uint64_t mes_bit_len = ((uint64_t)mes_len) * 8;
+    for(i = 0; i < 8; i++)
+    {
+        bkp_mes[bkp_len-i-1] = (unsigned char)((mes_bit_len & (0x00000000000000FF << (8 * (7 - i)))) >> (8 * (7 - i)));
+    }
+
+    for(i = 0; i < looptimes; i++)
+    {
+        for(int j = 0; j < 16; j++) //初始化
+        {
+            w[j] = 0x00000000;
+        }
+
+        md5_process_part1(w, data, &pos, mes_len, bkp_mes); // compute w
+
+        md5_process_part2(abcd, w, k_table, s_table); // calculate md5 and store the result in abcd
+    }
+
+    for(int i = 0; i < 16; i++)
+    {
+        //result[i] = ((unsigned char*)abcd)[i];
+		sprintf((char*)result+i*2,"%02x",((unsigned char*)abcd)[i]);   //2023-05-09 返回字符串
+    }
+
+    return 0;
+}
+
+
+
+//本次计算文件的md5，是烧录文件，需要做偏移
+//文件缓存，和文件大小
+//结果保存在全局变量中
+//返回0是成功，1是失败
+int get_file_md5sum2(unsigned char * filebuf,int size1)
+{
+//	FILE * fin1;
+//	char cmd[128] = {"md5sum "};
+//	int size1 ;
 	int ret;
+//	int readcount,bw;
 
-	strcat(cmd,filename);
 
-	filep = popen(cmd,"r");
-	if(!filep)
-		return -1;
-    ret = fread(md5_readBuf,32,1,filep);
- 
-//    printf("get_file_md5sum = %s\n",md5_readBuf);
-
-    pclose(filep);
+    ret = cal_md5(md5_readBuf, filebuf, size1);
+    //md5(buf, size1, md5_readBuf);
+    if(!ret) 
+    	printf("cal_md5 = %s\n",md5_readBuf);
 
     return ret;
 }
+
+
+#endif
+
+
+// static int get_file_md5sum(const char * filename)
+// {
+// 	FILE * filep;
+// 	char cmd[128] = {"md5sum "};
+	
+// 	int ret;
+
+// 	strcat(cmd,filename);
+
+// 	filep = popen(cmd,"r");
+// 	if(!filep)
+// 		return -1;
+//     ret = fread(md5_readBuf,32,1,filep);
+ 
+// //    printf("get_file_md5sum = %s\n",md5_readBuf);
+
+//     pclose(filep);
+
+//     return ret;
+// }
 
 
 static uint8_t checksum(uint8_t *buf, uint8_t len)
@@ -574,7 +751,7 @@ static uint8_t checksum(uint8_t *buf, uint8_t len)
 	return sum;
 }
 
-
+#if 0
 //成功返回buf的地址，否则返回NULL
 static char* file_read_check(const char *filename,int *filesize)
 {
@@ -690,7 +867,7 @@ static char* file_read_check(const char *filename,int *filesize)
 	*filesize = size;
 	return buf;
 }
-
+#endif
 
 
 
@@ -798,6 +975,168 @@ static int ready_to_update(void)
 
 
 
+#define ApplicationAddress    0x8006000
+
+
+//成功返回buf的地址，否则返回NULL
+char* file_read_check(const char *filename,int *filesize)
+{
+	size_t len;
+    int ret;// fd;
+    FILE *fin;// *fout;
+    int size = 0;
+    int bw = 0;       
+    int readcount = 0;
+    char filename_md5[64] = {0};
+    char md5_value[64] = {0};
+    int file_offset = 0;
+
+#if 0
+    len = strlen(filename);
+    if(len < 5 || len > 63)
+    {
+    	printf("ERROR: filename length = %ld <5-63>\n",len);
+    	return NULL;
+    }
+
+    strncpy(filename_md5,filename,len-4);    //调整一下后缀
+    strcat(filename_md5,".md5");   //形成文件名后缀为md5。
+
+    printf("md5file_name = %s\n",filename_md5);
+    fin = fopen(filename_md5, "rb");
+    if (fin != NULL)
+    {
+        /* 文件打开成功*/
+        printf("open %s success\r\n",filename_md5);
+    }
+    else
+    {
+        printf("open %s error\r\n",filename_md5);
+        return NULL;
+    }
+
+    //md5文件的第一行必须是md5值，一次性读出32字节，否则失败
+    bw = fread(md5_value, 1, 32, fin);
+    if(bw != 32)
+    {
+    	fclose(fin);
+    	printf("ERROR: read md5_file failed ! md5_value = %s ret = %d\n",md5_value,bw);
+    	return NULL;
+    }
+    fclose(fin);
+    printf("read md5_file success! md5_value = %s\n",md5_value);
+#endif
+	// ret = get_file_md5sum(filename);
+	// if(ret > 0)
+	// {
+	// 	printf("get_file_md5sum = %s,strlen = %lu\n",md5_readBuf,strlen(md5_readBuf));
+	// 	//比较文件的md5
+	// 	if(strcmp(md5_readBuf,md5_value))
+	// 	{
+	// 		printf("md5 compare failed ! please check bin file!!!!\n");
+	// 		return NULL;
+	// 	}
+	// }
+	// else
+	// {
+	// 	printf("error : get_file_md5sum \n");
+	// 	return NULL;
+	// }
+
+    fin = fopen(filename, "rb");
+    if (fin != NULL)
+    {
+        /* 文件打开成功*/
+        printf("open %s success\r\n",filename);
+    }
+    else
+    {
+        printf("open %s error\r\n",filename);
+        return NULL;
+    }
+
+    // fseek(fin, 0, SEEK_END);
+    // size = ftell(fin);
+    // fseek(fin, 0, SEEK_SET);
+    // printf("file size = %d\r\n", size);
+
+    file_offset = ApplicationAddress & 0x7f00;  //iap的偏移全部去掉
+    fseek(fin, 0, SEEK_END);
+    size = ftell(fin);
+
+    fseek(fin, file_offset-512, SEEK_SET);   //读出md5
+    bw = fread(md5_value, 1, 32, fin);
+    if(bw != 32)
+    {
+    	fclose(fin);
+    	printf("ERROR: read md5_file failed ! ret = %d\n",bw);
+    	return NULL;
+    }
+    printf("read file md5 success! md5_value = %s\n",md5_value);
+
+    fseek(fin, file_offset, SEEK_SET);   //读取的位置也是不从0开始
+    size -= (file_offset);  //去掉偏移的字节
+    printf("file size = %d\r\n", size);
+
+    char* buf = malloc(size);
+    if(buf == NULL)
+    {
+    	printf("error: malloc %d\n",size);
+    	fclose(fin);
+    	return NULL;
+    }
+
+    do
+    {
+        bw = fread(&buf[readcount], 1, size, fin);
+        readcount += bw;
+    } while (readcount < size);
+
+    printf("file readcount = %d\r\n", readcount);
+    fclose(fin);
+
+    //比较md5
+    ret = get_file_md5sum2(buf,size);
+	if(ret == 0)
+	{
+		printf("get_file_md5sum = %s,strlen = %lu\n",md5_readBuf,strlen(md5_readBuf));
+		//比较文件的md5
+		if(strcmp(md5_readBuf,md5_value))
+		{
+			printf("md5 compare failed ! please check bin file!!!!\n");
+			free(buf);
+			return NULL;
+		}
+	}
+	else
+	{
+		printf("error : get_file_md5sum ret = %d\n",ret);
+		free(buf);
+		return NULL;
+	}
+
+
+    if (((*(uint32_t*)buf) & 0xfFFE0000 ) != 0x20000000)
+	{
+		printf("image addr 0 != 0x20000000\n");
+		printf("ERROR: bad image(bin)!!!!! update cancle!!!,please check bin file!!!");
+		free(buf);
+		return NULL;
+	}
+	else if(((*(uint32_t*)(buf+4)) & 0xfFFffc00 ) != ApplicationAddress)
+	{
+		printf("image  addr %#x != ApplicationAddress %#x\n",((*(uint32_t*)(buf+4)) & 0xfFFffc00 ),ApplicationAddress);
+		printf("ERROR: bad image(bin)!!!!! update cancle!!!,please check again!!!");
+		free(buf);
+		return NULL;
+	}
+	*filesize = size;
+	return buf;
+}
+
+
+
+
 /*
 *********************************************************************************************************
 *	º¯ Êý Ãû: xymodem_send
@@ -814,9 +1153,9 @@ int xymodem_send(const char *filename)
 	char data[2] = {0};
     int size = 0;
     int recv_0x43 = 0;
-
-    //文件检测，核对md5值，核对是否是bin文件等
-	char* buf = file_read_check(filename,&size);
+	char *buf;
+    
+    buf = file_read_check(filename,&size);
 	if(buf == NULL)
 	{
 		printf("error : bin_file_read_check\n");

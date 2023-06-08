@@ -169,6 +169,8 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 	uint8_t md5_same = 0;  //md5相同为0，否则为1
 	uint32_t FlashDestination_const;	
 	uint8_t time_out = 0;   //做一个计时，如果计数120次（大概两分钟？），就退出下载模式
+	int32_t packets_received_debug = 0;
+	uint8_t checkok = 0;   //校验头部
 	/* Initialize FlashDestination variable */
 //	if(is_cpu_update_cmd) //rk3399下载的位置不同，是down分区
 //	{
@@ -202,15 +204,17 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 							break;
 						/* Normal packet */
 						default:
-							if((packet_data[PACKET_SEQNO_INDEX]) < packets_received)  //丢掉重复的包，ymodem可能会发送多次
-							{
-								printf("---packet_data[PACKET_SEQNO_INDEX] = %#x packets_received = %d\r\n",packet_data[PACKET_SEQNO_INDEX],packets_received);
-							//	packets_received--;
-								continue;
-							}
+//							if((packet_data[PACKET_SEQNO_INDEX]) < (packets_received & 0xff))  //丢掉重复的包，ymodem可能会发送多次
+//							{
+//								if(is_cpu_update_cmd)
+//									printf("---packet_data[PACKET_SEQNO_INDEX] = %#x packets_received = %d\r\n",packet_data[PACKET_SEQNO_INDEX],packets_received);
+//							//	packets_received--;
+//								continue;
+//							}
 							if ((packet_data[PACKET_SEQNO_INDEX] & 0xff) != (packets_received & 0xff))
 							{
-								printf("packet_data[PACKET_SEQNO_INDEX] = %#x packets_received = %d\r\n",packet_data[PACKET_SEQNO_INDEX],packets_received);
+								if(is_cpu_update_cmd)
+									printf("packet_data[PACKET_SEQNO_INDEX] = %#x packets_received = %d\r\n",packet_data[PACKET_SEQNO_INDEX],packets_received);
 								Send_Byte(NAK);
 							}
 							else
@@ -218,9 +222,8 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 								if (packets_received == 0)   //2023-04-12 增加
 								{
 									/* Filename packet */
-									if (packet_data[PACKET_HEADER] != 0)
+									if (!checkok &&  (packet_data[PACKET_HEADER] != 0))
 									{
-										//j=0;
 										/* Filename packet has valid data */
 										for (i = 0, file_ptr = packet_data + PACKET_HEADER; (*file_ptr != 0) && (i < FILE_NAME_LENGTH);)
 										{
@@ -238,14 +241,14 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 										//	j++;
 										}
 										file_size[i++] = '\0';
-									//	printf("file_size = %s,j=%d\r\n",file_size,j);
+										if(is_cpu_update_cmd)
+											printf("file_size = %s\r\n",file_size);
 										Str2Int(file_size, &size);
-
-										while(*file_ptr == '\0' || *file_ptr == ' ')
-											file_ptr++;
 										
 										if(is_cpu_update_cmd)  //rk3399下载才有md5码
 										{
+											while(*file_ptr == '\0' || *file_ptr == ' ')
+												file_ptr++;
 											for (i = 0; (i < FILE_MD5_LENGTH);i++) //(*file_ptr != '\0') &&&& (*(pdown_md5+i) != '\0') 
 											{
 												md5sum_down[i] = *(file_ptr+i);
@@ -272,14 +275,21 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 											}
 											md5sum_down[i] = '\0';
 										}
+										else
+										{  //串口发送的前面一节不要
+											size -= (ApplicationAddress&0xfc00);   //减掉前面的iap部分
+										//	if(is_cpu_update_cmd)
+										//		printf("size 2 = %d\n",size);
+										}
+										
 										/* Test the size of the image to be sent */
 										/* Image size is greater than Flash size */
 										if (size > (FLASH_IMAGE_SIZE - 1))  //FLASH_SIZE
 										{
-											printf("size(%d) > (FLASH_IMAGE_SIZE - 1)(%d)\r\n",size , (FLASH_IMAGE_SIZE - 1));
 											/* End session */
 											Send_Byte(CA);
 											Send_Byte(CA);
+											printf("size(%d) > (FLASH_IMAGE_SIZE - 1)(%d)\r\n",size , (FLASH_IMAGE_SIZE - 1));											
 											return -1;
 										}
 
@@ -296,7 +306,7 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 										Send_Byte(CRC16);
 									}
 									/* Filename packet is empty, end session */
-									else
+									else if(checkok)
 									{
 										Send_Byte(ACK);
 										file_done = 1;
@@ -307,45 +317,84 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 								/* Data packet */
 								else
 								{
-									//memcpy(buf_ptr, packet_data + PACKET_HEADER, packet_length);
-									
-									if(packets_received == 1)  //可能下载的不是bin文件
+									if(!checkok)
 									{
-										if (((*(__IO uint32_t*)buf_ptr) & 0xfFFE0000 ) != 0x20000000)
+										if(!is_cpu_update_cmd && (packets_received_debug < ((ApplicationAddress&0xfc00)))) //调试串口下载，丢掉前面的数据
 										{
-											Send_Byte(CA);
-											Send_Byte(CA);
-											printf("down file error 1,abort\r\n");
-											/* End session */
+											if(packets_received_debug == ((ApplicationAddress&0xfc00)-512)) //第24帧有md5值
+											{
+												for (i = 0; (i < FILE_MD5_LENGTH);i++) //(*file_ptr != '\0') &&&& (*(pdown_md5+i) != '\0') 
+												{
+													md5sum_down[i] = *(buf_ptr+i);
+													if(*(pdown_md5+i) != *(buf_ptr+i))
+													{
+														md5_same = 1;  //md5不同，可以升级
+													}
+												}
+												md5sum_down[i] = '\0';
+												//printf("md5sum_down = %s\r\n",md5sum_down);
+												//printf("j=%d\r\n",j);
+												if(!md5_same) //md5一致，不升级
+												{										
+													/* End session */
+													Send_Byte(CA);
+													Send_Byte(CA);						
+													return -4;
+												}
+												//md5sum_down[i] = '\0';
+											}
+											packets_received_debug += packet_length;
+											Send_Byte(ACK);
+											packets_received ++;
+											session_begin = 1;
+											continue;
 											
-											return -2;
 										}
-										else if(((*(__IO uint32_t*)(buf_ptr+4)) & 0xfFFff000 ) != ApplicationAddress)
+										//memcpy(buf_ptr, packet_data + PACKET_HEADER, packet_length);
+										
+										if((is_cpu_update_cmd && (packets_received == 1)) || (!is_cpu_update_cmd && (packets_received_debug == ((ApplicationAddress&0xfc00)))))  //可能下载的不是bin文件
 										{
-											Send_Byte(CA);
-											Send_Byte(CA);
-											printf("down file error 2,abort\r\n");
-											/* End session */
+											if (((*(__IO uint32_t*)buf_ptr) & 0xfFFE0000 ) != 0x20000000)
+											{
+												Send_Byte(CA);
+												Send_Byte(CA);
+												printf("down file error 1,abort\r\n");
+												/* End session */
+												
+												return -2;
+											}
+											else if(((*(__IO uint32_t*)(buf_ptr+4)) & 0xfFFff000 ) != ApplicationAddress)
+											{
+												Send_Byte(CA);
+												Send_Byte(CA);
+												printf("down file error 2,abort\r\n");
+												/* End session */
+												
+												return -2;
+											}
 											
-											return -2;
+											checkok = 1;
 										}
 									}
-									
-									RamSource = (uint32_t)buf_ptr;
-									for (j = 0;(j < packet_length) && (FlashDestination <  FlashDestination_const + size);j += 4)
+									if(checkok)  //checkok
 									{
-										/* Program the data received into STM32F10x Flash */
-										fmc_word_program(FlashDestination, *(uint32_t*)RamSource);
-
-										if (*(uint32_t*)FlashDestination != *(uint32_t*)RamSource)
+										RamSource = (uint32_t)buf_ptr;
+										for (j = 0;(j < packet_length) && (FlashDestination <  FlashDestination_const + size);j += 4)
 										{
-											/* End session */
-											Send_Byte(CA);
-											Send_Byte(CA);
-											return -2;
+											/* Program the data received into STM32F10x Flash */
+											
+											fmc_word_program(FlashDestination, *(uint32_t*)RamSource);
+
+											if (*(uint32_t*)FlashDestination != *(uint32_t*)RamSource)
+											{
+												/* End session */
+												Send_Byte(CA);
+												Send_Byte(CA);
+												return -2;
+											}
+											FlashDestination += 4;
+											RamSource += 4;
 										}
-										FlashDestination += 4;
-										RamSource += 4;
 									}
 									Send_Byte(ACK);
 								}
@@ -367,10 +416,10 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 						{
 							errors ++;
 							if (errors > MAX_ERRORS)
-							{
+							{								
+								Send_Byte(CA);
+								Send_Byte(CA);
 								printf("errors = %d\r\n",errors);
-								Send_Byte(CA);
-								Send_Byte(CA);
 								return 0;
 							}
 						}

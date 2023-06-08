@@ -51,8 +51,54 @@ void goto_ota_update(void)
 
 
 
+//起始地址
+static uint32_t g_watchdog_startup_addr = (UPDATE_FLAG_START_ADDR-PAGE_SIZE); //设置起始地址，0x805800  //再退1024字节
+
+//返回1表示开机开启看门狗，0表示关闭看门狗
+uint8_t is_watchdog_startup_inflash(void)
+{
+	uint8_t ret = *(uint8_t*)g_watchdog_startup_addr == 0xff;
+	if(ret)
+		printf("watchdog_startup_inflash is on!!!\r\n");
+	else
+		printf("watchdog_startup_inflash is off####!!!!!!!!\r\n");
+	return ret;  //如果是0xff表示开启，否则表示关闭
+}
 
 
+//把开机启动是否启动看门狗设置到flash中，非0表示开启，0表示关闭
+void set_watchdog_startup_inflash(uint8_t enable)
+{
+	uint8_t iseneble = 0;  //没有开启
+	
+	iseneble = is_watchdog_startup_inflash();
+	
+	if(enable) 
+	{
+		if(iseneble)//需要开启，并且已经是开启的
+		{
+			printf("set watchdog_startup_inflash is already on,none set!!!\r\n");
+			return;
+		}
+		else  //需要开启，并且没有开启，就擦除flash
+		{
+			fmc_page_erase(g_watchdog_startup_addr);
+			printf("set watchdog_startup_inflash is on  now!!!\r\n");
+		}
+	}
+	else{
+		if(iseneble)  //不需要开启，已经开启，则修改数据为非0xff
+		{	
+			fmc_halfword_program(g_watchdog_startup_addr, 0xfffc);  //把最低2位清零，这里写的接口是半字
+			printf("set watchdog_startup_inflash is off now!!!\r\n");
+		}
+		else
+		{
+			printf("set watchdog_startup_inflash is already off,none set!!!\r\n");
+			return;
+		}
+	}
+}
 
 
 //启动后，设置升级成功标志

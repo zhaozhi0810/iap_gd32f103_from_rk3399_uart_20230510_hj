@@ -6,6 +6,7 @@
 
 #include <gd32f10x.h>
 
+extern uint8_t is_debug_down_wtg;       //1调试串口关闭了看门狗，这样就不会允许打开了，直到调试串口允许，或者重启
 
 void hard_wtd_enable(void);
 void hard_wtd_disable(void);

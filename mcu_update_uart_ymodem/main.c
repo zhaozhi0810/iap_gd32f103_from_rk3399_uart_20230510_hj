@@ -83,7 +83,7 @@ static int is_server_process_start(char * cmd_name)
 
 int main(int argc,char* argv[]) 
 {
-	char* filename = "./app.bin";
+	char* filename = "./hj22134-gd32f103-freertos.bin";
 	int get_name = 0,c;
 	int serverflag = 0;//,ret
 	int go_ahead = 1;    //继续吗？0要键入字符y才能继续
