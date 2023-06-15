@@ -173,7 +173,7 @@ void USART1_IRQHandler(void)
 
 
 #define UPDATE_FLAG_START_ADDR   (ApplicationAddress-PAGE_SIZE)     //设置起始地址，0x8005c00
-#define DOWN_MD5_OFFET  512    //下载区的md5偏移地址
+#define DOWN_MD5_OFFET  (512+8)    //下载区的md5偏移地址,2023-06-12 +8
 #define FILE_MD5_LENGTH 32
 
 
@@ -234,9 +234,15 @@ void AnswerCpu_data(uint8_t *cmd)
 			if(!(cmd[1]&0xf0))  //高4位必须为0，才能开启或关闭看门狗
 			{
 				if((cmd[1]&0xf))   //低4位为非0
+				{
+					is_debug_down_wtg = 0;
 					hard_wtd_enable();   //打开看门狗
+				}
 				else   //低4位为0
+				{
+					is_debug_down_wtg = 1;
 					hard_wtd_disable();  //关闭
+				}
 			}
 			else if((cmd[1]&0xf0) == 0xe0)
 			{

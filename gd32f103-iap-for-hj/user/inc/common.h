@@ -80,7 +80,7 @@ typedef  void (*pFunction)(void);
 
 
 #define UPDATE_FLAG_START_ADDR   (ApplicationAddress-PAGE_SIZE)     //设置起始地址，0x8005c00
-#define DOWN_MD5_OFFET  512    //下载区的md5偏移地址
+#define DOWN_MD5_OFFET  (512+8)    //下载区的md5偏移地址，2023-06-12 +8
 
 //#define APP_MD5_OFFET   576    //APP区的md5偏移地址
 

@@ -2,7 +2,7 @@
 * @Author: dazhi
 * @Date:   2023-05-09 09:30:03
 * @Last Modified by:   dazhi
-* @Last Modified time: 2023-06-08 17:14:33
+* @Last Modified time: 2023-06-13 09:27:03
 *
 * 如果使用md5sum的命令，则在windows下编译时，无法计算md值
 * 下载mingw64：
@@ -494,7 +494,9 @@ void combin_file(char* file1,char* file2,char* outfilename)
     }
 
 
-    posision += 512;   //写入md5的值。
+    posision += 512;   //写入md5的值。2023-06-12 hj的+8
+    if(strstr(file2,"hj22134") != NULL)
+        posision += 8; // hj的+8
     printf("posion3 = %#x\n",posision);
     for(i=0;i<32;i++)
     {

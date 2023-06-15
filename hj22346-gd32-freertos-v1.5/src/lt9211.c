@@ -47,6 +47,7 @@ static struct video_timing video_1024x600_60Hz   ={ 128, 32, 128,1024,  1312, 16
 static void LT9211_Reset(void)
 {
 	//复位引脚PE1 
+	rcu_periph_clock_enable(RCU_GPIOE);
 //   P11 = 0;
 	gpio_bit_reset(GPIOE, GPIO_PIN_1);
 	vTaskDelay(100);
@@ -63,7 +64,7 @@ static void LT9211_Reset(void)
 
 
 //Mcu端的控制引脚初始化
-static void LT9211_Mcu_ControlPort_Init(void)
+void LT9211_Mcu_ControlPort_Init(void)
 {
 	//1. iic的初始化
 	IicApp_Init(IIC1_INDEX);   //PB6，PB7 使用的是iic1（stm32称为是iic1）	

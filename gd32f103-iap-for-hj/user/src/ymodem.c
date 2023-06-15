@@ -326,6 +326,9 @@ int32_t Ymodem_Receive (void)  //uint8_t *buf
 												for (i = 0; (i < FILE_MD5_LENGTH);i++) //(*file_ptr != '\0') &&&& (*(pdown_md5+i) != '\0') 
 												{
 													md5sum_down[i] = *(buf_ptr+i);
+													if(i && md5sum_down[i] == 'f' && md5sum_down[i-1] == 'f') //连续两个ff
+														break;
+													
 													if(*(pdown_md5+i) != *(buf_ptr+i))
 													{
 														md5_same = 1;  //md5不同，可以升级

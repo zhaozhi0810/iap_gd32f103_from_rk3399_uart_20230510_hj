@@ -84,7 +84,7 @@ static void BoardInit(void)
 int main(void)
 {
 	nvic_vector_table_set(NVIC_VECTTAB_FLASH, 0x6000);   //注意变化！！！2023-02-01
-	
+	LT9211_Mcu_ControlPort_Init();   //加上了9211的初始化，早点复位。
 	BoardInit();
 
 	debug_printf_string("freertos , init ok!!\r\n");
@@ -94,7 +94,7 @@ int main(void)
 //	debug_printf_string("\r\n");
 	
 	//1.工作灯的任务
-	xTaskCreate(Task_Led_Show_Work,"TaskLed1",configMINIMAL_STACK_SIZE,NULL,2,NULL);
+	xTaskCreate(Task_Led_Show_Work,"TaskLed1",configMINIMAL_STACK_SIZE+32,NULL,2,NULL);
 	//2.调试串口接收任务
 	xTaskCreate(Com_Debug_Recv_Task,"debugr",configMINIMAL_STACK_SIZE*2,NULL,2,NULL);  //调试串口接收任务
 
